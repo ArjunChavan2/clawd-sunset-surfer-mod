@@ -5,6 +5,7 @@ import { bubble, clean, holdFrames, parseClawd, persona, HELP } from './chat'
 import { ACT_FRAMES, FRAME_MS, frameRows, H, hold, type Mode as Scene, type Shown } from './scenes'
 import { frameRows as runnerRows, H as RUN_H, MAX_STAGE as RUN_STAGE, FRAME_MS as RUN_MS } from './world'
 import type { Band } from '../types'
+import { board, cleanBoard, isBest, record } from './scores'
 
 const MAX_STAGE = 60 // widest the wander roams, however wide the terminal
 const frame = atom({ plugin: 'clawd-mods', key: 'frame' } as const, 0)
@@ -18,6 +19,7 @@ let word = 'Thinking'
 let mode: Scene = 'thinking'
 let isTurnRunning = false
 let isRunner = false // the band's act, mirrored from $.store for the timers
+let scores: number[] = [] // the runner's personal best distances, highest first, kept in $.store
 let turnBase = 0 // the frame the turn started on: acts count from it
 let seed = 0 // shuffles the session's rotation of scenes
 let played = 0 // rotation acts earlier turns got through
@@ -29,6 +31,15 @@ const running: { id: string; tool: string }[] = [] // tools in flight, newest la
 
 const REACT_FRAMES = Math.round(6000 / FRAME_MS) // how long a /clawd action plays
 const WAIT_FRAMES = Math.round(15_000 / FRAME_MS) // the most Clawd ponders before a reply
+
+/** A finished runner turn's distance goes on the personal board; a new best gets a toast. */
+const recordRun = async ($: Engine, m: number) => {
+  if (m < 10) return // a blink of a turn is not a run
+  const best = isBest(scores, m)
+  scores = record(scores, m)
+  await $.store.set('scores', scores)
+  if (best) $.ui.toast(`New best: ${m}m`)
+}
 
 /** Writes the turn's show through to $.state, for the module a reload brings in. */
 const keep = ($: Engine) => update($, show, () => ({ isTurnRunning, turnBase, seed, played }))
@@ -73,6 +84,7 @@ export const register: Register = on => {
       await keep($)
     }
     isRunner = (await $.store.get('band')) === 'runner'
+    scores = cleanBoard(await $.store.get('scores'))
     await update($, band, () => (isRunner ? 'runner' : 'clawd'))
     $.clock.every(FRAME_MS, () => {
       const isReacting = reaction !== undefined
@@ -83,7 +95,7 @@ export const register: Register = on => {
     // the runner is tuned to its own, faster tick; each timer writes only in its own act
     $.clock.every(RUN_MS, () => (isRunner && isTurnRunning ? tick($) : undefined))
     // last, so the timers run whatever happens here; immediate: /clawd runs mid-turn instead of waiting
-    await $.command.register({ name: 'runner', description: 'Switch the band between Clawd and the runner', argumentHint: '[clawd|runner]', immediate: true })
+    await $.command.register({ name: 'runner', description: 'Switch the band between Clawd and the runner', argumentHint: '[clawd|runner|scores|reset]', immediate: true })
     await $.command.register({ name: 'clawd', description: 'Pet, feed or wave at Clawd, or say something to it', argumentHint: '[pet|feed|wave|dance|shift|message]', immediate: true })
     return r
   })
@@ -109,6 +121,16 @@ export const register: Register = on => {
   // Answers in a toast only: no transcript line, so nothing of it reaches Claude
   on('command.run', { command: 'runner' }, async ($, e) => {
     const arg = String(e.args ?? '').trim().toLowerCase()
+    if (arg === 'scores') {
+      $.ui.toast(`Best runs: ${board(scores)}`)
+      return {}
+    }
+    if (arg === 'reset') {
+      scores = []
+      await $.store.set('scores', scores)
+      $.ui.toast('Scores cleared')
+      return {}
+    }
     const next: Band = arg === 'runner' || arg === 'clawd' ? arg : isRunner ? 'clawd' : 'runner'
     isRunner = next === 'runner'
     await update($, band, () => next)
@@ -138,6 +160,7 @@ export const register: Register = on => {
 
   on('turn.complete', async ($, e, next) => {
     if (e.agentId) return next(e) // a subagent's turn (a workflow's agents too): the main turn runs on
+    if (isRunner && isTurnRunning) await recordRun($, (await read($, frame)) - turnBase)
     isTurnRunning = false
     played += Math.floor(((await read($, frame)) - turnBase) / ACT_FRAMES) // acts after the opener
     await keep($)
@@ -165,7 +188,7 @@ export const register: Register = on => {
       return (
         <ui.Box flexDirection="column">
           <ui.Box flexDirection="column" height={RUN_H}>
-            {runnerRows(t - turnBase, stage, seed + turnBase).map(runs => (
+            {runnerRows(t - turnBase, stage, seed + turnBase, scores[0] ?? 0).map(runs => (
               <ui.Text>{runs.map(r => <ui.Text color={r.color} backgroundColor={r.bg}>{r.text}</ui.Text>)}</ui.Text>
             ))}
           </ui.Box>

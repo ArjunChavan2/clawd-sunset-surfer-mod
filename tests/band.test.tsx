@@ -32,3 +32,29 @@ test('with the runner band the runner draws and animates during a turn, then lea
   await ui.redraw({ ...BAND, isWorking: false })
   expect(await shown(ui)).toBe('below')
 })
+
+test('a runner turn lands on the saved board, a new best toasts, and /runner scores and reset work', async ($, on) => {
+  const clock = mock.clock(on)
+  const saved: unknown[] = []
+  const toasts: string[] = []
+  on('session.start', ($, e) => ({ cwd: e.cwd }))
+  on('store.get', (_, e: any) => ({ value: e.key === 'band' ? 'runner' : e.key === 'scores' ? [30] : undefined }))
+  on('store.set', (_, e: any) => (e.key === 'scores' && saved.push(e.value), { value: undefined }))
+  on('ui.toast', (_, e: any) => (toasts.push(e.text), { value: undefined }))
+  on('command.register', ($, e) => ({ value: { command: e.name } }))
+  on('turn.start', () => ({ turnId: 't1' }))
+  on('turn.complete', () => ({ text: '' }))
+  await $.session.start({ cwd: '/tmp', surface: 'terminal' } as any)
+  await $.turn.start({ text: 'hi', turnId: 't1' } as any)
+  await clock.advance(80 * 60) // a minute-ish of ticks: well past the saved 30m
+  await $.turn.complete({ reason: 'answered', turnId: 't1' } as any)
+  expect((saved.at(-1) as number[])[0]).toBeGreaterThan(30)
+  expect((saved.at(-1) as number[]).includes(30)).toBe(true)
+  expect(toasts.some(t => t.startsWith('New best: '))).toBe(true)
+
+  await $.command.run({ command: 'runner', args: 'scores' } as any)
+  expect(toasts.at(-1)).toMatch(/^Best runs: 1\. \d+m · 2\. 30m$/)
+  await $.command.run({ command: 'runner', args: 'reset' } as any)
+  expect(saved.at(-1)).toEqual([])
+  expect(toasts.at(-1)).toBe('Scores cleared')
+})

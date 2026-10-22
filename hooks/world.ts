@@ -78,7 +78,7 @@ const PALETTE: Record<string, RGB> = { O: rgb(ORANGE), L: [245, 160, 125], D: [1
 type Box = { x0: number; x1: number; y0: number; y1: number; dN: number; dF: number; base: RGB; stripe?: RGB; before: boolean }
 
 /** The stage at tick `t` as H rows of runs, each exactly `width` columns. */
-export const frameRows = (t: number, width: number, seed: number): Run[][] => {
+export const frameRows = (t: number, width: number, seed: number, best = 0): Run[][] => {
   const W = width
   const cx = Math.floor(W / 2)
   const f = W * 0.28 // world x to pixels at scale 1: the road (±1.5) fills most of the width
@@ -182,10 +182,12 @@ export const frameRows = (t: number, width: number, seed: number): Run[][] => {
   const cells = Array.from({ length: H }, (_, r) =>
     Array.from({ length: W }, (_, x) => ({ ch: '▀', color: hex(px[2 * r][x]), bg: hex(px[2 * r + 1][x]) })),
   )
-  const score = `${t}m`
-  for (let i = 0; i < score.length; i++) {
+  // the live distance, with the personal best beside it; gold once this run passes it
+  const score = best ? `${t}m  best ${best}m` : `${t}m`
+  const ink = best && t > best ? '#ffd23f' : '#ffffff'
+  for (let i = 0; i < score.length && W - score.length + i >= 0; i++) {
     const c = cells[0][W - score.length + i]
-    cells[0][W - score.length + i] = { ch: score[i], color: '#ffffff', bg: c.color }
+    cells[0][W - score.length + i] = { ch: score[i], color: ink, bg: c.color }
   }
   return cells.map(r => {
     const runs: Run[] = []
