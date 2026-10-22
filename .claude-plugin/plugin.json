@@ -1,0 +1,1 @@
+{ "name": "clawd-mods", "version": "0.1.0", "description": "Clawd acts out what Claude is doing above the prompt, or runs an endless-runner course: switch with /runner", "author": { "name": "ArjunChavan2" }, "license": "MIT", "types": "./types/index.d.ts" }

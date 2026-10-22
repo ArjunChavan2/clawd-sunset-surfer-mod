@@ -1,0 +1,1 @@
+{ "name": "clawd-mods", "owner": { "name": "ArjunChavan2" }, "plugins": [{ "name": "clawd-mods", "source": "./", "description": "Clawd, with a runner mode: switch with /runner" }] }
