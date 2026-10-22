@@ -23,6 +23,8 @@ In Claude Code:
 |---|---|
 | `/runner` | Toggle between Clawd and the sunset surfer (remembered across sessions) |
 | `/runner clawd` / `/runner runner` | Pick one |
+| `/runner scores` | Show your personal top 5 runs (distance per turn; kept locally, never uploaded) |
+| `/runner reset` | Clear your scores |
 | `/clawd pet` `feed` `wave` `dance` | Interact with Clawd (Clawd act only) |
 | `/clawd <message>` | Chat in a speech bubble (one small Haiku call) |
 
